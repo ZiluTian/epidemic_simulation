@@ -13,17 +13,19 @@ using namespace std;
 
 class Record : public Log{
   public: 
-    map<enum SEIHCRD, timestamp> record = {
-      {SUSCEPTIBLE, -1}, 
-      {EXPOSED, -1}, 
-      {INFECTIOUS, -1}, 
-      {HOSPITALIZED, -1}, 
-      {CRITICAL, -1}, 
-      {RECOVERED, -1}, 
-      {DECEASED, -1}
-    }; 
+    map<enum SEIHCRD, timestamp> record; 
 
-    Record(){}
+    Record(){
+      record = {
+        {SUSCEPTIBLE, -1}, 
+        {EXPOSED, -1}, 
+        {INFECTIOUS, -1}, 
+        {HOSPITALIZED, -1}, 
+        {CRITICAL, -1}, 
+        {RECOVERED, -1}, 
+        {DECEASED, -1}
+      }; 
+    }
 
     timestamp get(enum SEIHCRD state){
       return record.find(state)->second; 
@@ -150,9 +152,18 @@ class LocationSummary : public Log{
 
 class SEIHCRD_Transitions {
   public: 
-    Record * record = new Record();  
+    Record * record;  
     enum AtLocation location; 
     enum SEIHCRD health_status; 
+    timestamp init_time; 
+
+    SEIHCRD_Transitions(enum AtLocation loc, enum SEIHCRD health, timestamp ts){
+      record = new Record(); 
+      location = loc; 
+      health_status = health; 
+      init_time = ts; 
+      record->set(health_status, ts); 
+    }
 
     void S2E(timestamp ts){
       health_status = EXPOSED; 
@@ -213,14 +224,8 @@ class SEIHCRD_Transitions {
     }
 }; 
 
-class Person : public SEIHCRD_Transitions {
+class Person {
   private: 
-    int age; 
-    int latent_period; 
-
-    bool symptomatic; 
-    bool isolate; 
-
     // non-critical death 
     bool isFatal(){
       return prob2Bool(rateByAge(FATALITY, age)); 
@@ -239,23 +244,29 @@ class Person : public SEIHCRD_Transitions {
     //   return prob2Bool(HOSPITALIZATION_CRITICAL); 
     // }
 
-    void personalInfo(timestamp ts){
-      record->printRecord(); 
-      cout << "Time " << ts << " Status: " << SEIHCRD[health_status] << " Location " << AtLocation[location] << " (was) Symptomatic? " << symptomatic << endl; 
-    }
-
   public: 
-    Person(enum AtLocation loc, enum SEIHCRD health){
-      age = getAge(age_by_location.find(loc)->second); 
-      location = loc;  
+    int age; 
+    int latent_period; 
+    SEIHCRD_Transitions* state; 
+
+    bool symptomatic; 
+    bool isolate; 
+
+    Person(SEIHCRD_Transitions* initial_state){
+      state = initial_state; 
+      age = getAge(age_by_location.find(initial_state->location)->second); 
       symptomatic = prob2Bool(PROB_SYMPTOMATIC); 
-      health_status = health; 
       if (symptomatic){
         latent_period = SYMPTOMATIC_LATENT_PERIOD; 
         isolate = prob2Bool(INFECTIOUS_SELF_ISOLATE_RATIO); 
       } else {
         latent_period = ASYMPTOMATIC_LATENT_PERIOD; 
       }
+    }
+
+    void personalInfo(timestamp ts){
+      state->record->printRecord(); 
+      cout << "Time " << ts << " Status: " << SEIHCRD[state->health_status] << " Location " << AtLocation[state->location] << " (was) Symptomatic? " << symptomatic << endl; 
     }
 
     // For DEV    
@@ -276,13 +287,13 @@ class Person : public SEIHCRD_Transitions {
       symptomatic and exposed and less than latent period -> 0 
     */
     double getInfectiousness(timestamp ts) {
-      if (health_status == SUSCEPTIBLE || health_status == RECOVERED || health_status == DECEASED) {
+      if (state->health_status == SUSCEPTIBLE || state->health_status == RECOVERED || state->health_status == DECEASED) {
         return 0; 
       }
 
       double rand_gamma = randGamma();
-      if (health_status == EXPOSED){
-        if (symptomatic && (record->get(health_status) > latent_period)){
+      if (state->health_status == EXPOSED){
+        if (symptomatic && (state->record->get(state->health_status) > latent_period)){
           return rand_gamma; 
         }
         return 0; 
@@ -297,7 +308,7 @@ class Person : public SEIHCRD_Transitions {
 
     bool underExposed(double infectiousness, double transmission_prob, timestamp ts){
       if (prob2Bool(infectiousness * transmission_prob)){
-        S2E(ts); 
+        state->S2E(ts); 
         return true; 
       }
       return false; 
@@ -306,54 +317,54 @@ class Person : public SEIHCRD_Transitions {
     // handle the state transition 
     enum SEIHCRD statusUpdate(timestamp ts){
       // personalInfo(ts); 
-      switch (health_status) {
+      switch (state->health_status) {
         case EXPOSED:  
-          if (symptomatic && record->timeToTransit(health_status, ts, INCUBATION_PERIOD)){
-            E2I(ts); 
+          if (symptomatic && state->record->timeToTransit(state->health_status, ts, INCUBATION_PERIOD)){
+            state->E2I(ts); 
           } 
-          if (!symptomatic && record->timeToTransit(health_status, ts, latent_period)){
-            E2I(ts); 
+          if (!symptomatic && state->record->timeToTransit(state->health_status, ts, latent_period)){
+            state->E2I(ts); 
           }
           break; 
         case INFECTIOUS: 
-          if (!symptomatic && record->timeToTransit(health_status, ts, ASYMPTOMATIC_RECOVER)){
+          if (!symptomatic && state->record->timeToTransit(state->health_status, ts, ASYMPTOMATIC_RECOVER)){
             if (isFatal()){
-              I2D(ts); 
+              state->I2D(ts); 
             } else {
-              I2R(ts); 
+              state->I2R(ts); 
             }
           } 
-          if(symptomatic && record->timeToTransit(health_status, ts, HOSPITALIZATION_DELAY_MEAN)){
+          if(symptomatic && state->record->timeToTransit(state->health_status, ts, HOSPITALIZATION_DELAY_MEAN)){
             if (isHospitalized()){
-              I2H(ts); 
+              state->I2H(ts); 
             }
           } 
-          if(symptomatic && record->timeToTransit(health_status, ts, MILD_RECOVER)){
-            I2R(ts); 
+          if(symptomatic && state->record->timeToTransit(state->health_status, ts, MILD_RECOVER)){
+            state->I2R(ts); 
           }
           break;  
         case HOSPITALIZED: 
           assert(DECIDE_CRITICAL < HOSPITAL_DAYS); 
           // TODO can also use rateByAge for determining critical rate
-          if (record->timeToTransit(health_status, ts, DECIDE_CRITICAL)){
+          if (state->record->timeToTransit(state->health_status, ts, DECIDE_CRITICAL)){
             if (isCritical()){
-              H2C(ts); 
+              state->H2C(ts); 
             }
           } 
-          if (record->timeToTransit(health_status, ts, HOSPITAL_DAYS)){
+          if (state->record->timeToTransit(state->health_status, ts, HOSPITAL_DAYS)){
             if (isFatal()){
-              H2D(ts); 
+              state->H2D(ts); 
             } else {
-              H2R(ts);
+              state->H2R(ts);
             } 
           }
           break; 
         case CRITICAL:  // roll the die only once 
-          if(record->timeToTransit(health_status, ts, ICU_DAYS)){
+          if(state->record->timeToTransit(state->health_status, ts, ICU_DAYS)){
             if (prob2Bool(CRITICAL_DEATH)){
-              C2D(ts); 
+              state->C2D(ts); 
             } else {
-              C2R(ts); 
+              state->C2R(ts); 
             }
           }
           break; 
@@ -362,7 +373,7 @@ class Person : public SEIHCRD_Transitions {
         case DECEASED: 
           break;   
       }
-      return health_status; 
+      return state->health_status; 
     }
 }; 
 
@@ -400,44 +411,30 @@ class Location : TransmissionProb {
       population = pop; 
     }
 
-    void contact(Person& a, Person& b, timestamp ts){
+    void contact(Person a, Person b, timestamp ts){
       double infectious_a = a.getInfectiousness(ts); 
       double infectious_b = b.getInfectiousness(ts); 
-      
-      auto noRisk = [infectious_a, infectious_b, a, b](){
-        return ((a.location != b.location) ||
+
+      if ((a.state->location != b.state->location) ||
           (infectious_a==0 && infectious_b==0) || 
-          (infectious_a!=0 && infectious_b!=0)); 
-      }; 
-
-      // asymptomatic case at EXPOSED state is also not infectious
-      // pointer is too messy, const person can't modify state 
-      auto susceptiblePerson = [a, b]() -> int {
-        if (a.health_status == SUSCEPTIBLE) { return 1; }
-        if (b.health_status == SUSCEPTIBLE) { return 2; }
-        return -1;  
-      }; 
-      
-      auto infectiousness = [infectious_a, infectious_b](){
-        if (infectious_a > 0) { return infectious_a; }
-        if (infectious_b > 0) { return infectious_b; }
-      }; 
-
-      if (!noRisk()){
-        if (susceptiblePerson()==1){
-          a.underExposed(infectiousness(), getTransProb(location), ts); 
-        } 
-        if (susceptiblePerson()==2){
-          b.underExposed(infectiousness(), getTransProb(location), ts); 
-        }
+          (infectious_a!=0 && infectious_b!=0)){
+          return; 
       }
+      // asymptomatic case at EXPOSED state is also not infectious
+      if (a.state->health_status == SUSCEPTIBLE){
+        a.underExposed(infectious_b, getTransProb(location), ts);
+      } 
+      if (b.state->health_status == SUSCEPTIBLE){
+        b.underExposed(infectious_a, getTransProb(location), ts);
+      }
+      return; 
     } 
 
     // generate the population 
     void seed(timestamp ts){
       for (int i = 0; i < initial_seed; i++){
-        Person person(location, EXPOSED); 
-        person.record->set(EXPOSED, ts); 
+        SEIHCRD_Transitions* init_state = new SEIHCRD_Transitions(location, EXPOSED, ts); 
+        Person person(init_state); 
         population.push_back(person); 
       }
     }
@@ -446,8 +443,8 @@ class Location : TransmissionProb {
       seed(ts); 
       if (population.size()!=total){
         for (int i = 0; i < initial_susceptible; i++){
-          Person person(location, SUSCEPTIBLE); 
-          person.record->set(SUSCEPTIBLE, ts); 
+          SEIHCRD_Transitions* init_state = new SEIHCRD_Transitions(location, SUSCEPTIBLE, ts); 
+          Person person(init_state); 
           population.push_back(person); 
         }
       }
@@ -465,7 +462,7 @@ class Location : TransmissionProb {
       for(PopulationSize i = 0; i < total; ++i){
         // PopulationSize idx1 = randUniform(0, total-1); 
         // PopulationSize idx2 = randUniform(0, total-1); 
-        
+
         PopulationSize seed1 = randUniform(0, total-1); 
         PopulationSize idx1 = randGaussian(seed1, ncontacts); 
         PopulationSize idx2 = randGaussian(seed1, ncontacts); 
@@ -545,10 +542,25 @@ class Simulation {
 }; 
 
 int main(){
+  // testPerson(); 
   testSimulation(); 
   // testInfectiousness(); 
   // testPolicy(); 
   return 0; 
+}
+
+void testPerson(){
+  SEIHCRD_Transitions* state1 = new SEIHCRD_Transitions(HOME, SUSCEPTIBLE, 1); 
+  SEIHCRD_Transitions* state2 = new SEIHCRD_Transitions(HOME, INFECTIOUS, 1); 
+  Person person1(state1);
+  Person person2(state2); 
+  Location * home = new Location(HOME, vector<Person>{person1, person2}); 
+  
+  for (int i = 0; i < 10; ++i){
+    home->contact(person1, person2, i); 
+    person1.personalInfo(i); 
+    person2.personalInfo(i); 
+  }
 }
 
 void testSimulation(){

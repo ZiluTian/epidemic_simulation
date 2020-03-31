@@ -58,12 +58,13 @@ string AtLocation[] = {
 
 #define SYMPTOMATIC_INFECTIOUSNESS_SCALE 1.5 
 
-#define PER_CAPITA_CONTACTS 5
+#define PER_CAPITA_CONTACTS 40
 
 typedef long long int timestamp; 
 typedef long long int PopulationSize; 
 
 typedef pair<int, int> AgeInfo; // mean, variance 
+// typedef vector<pair<double, AgeInfo>>; 
 typedef map<enum SEIHCRD, PopulationSize> Summary; 
 typedef map<enum SEIHCRD, double> PercentileSummary; 
 typedef map<enum SEIHCRD, vector<PopulationSize>> History; 
@@ -80,6 +81,7 @@ int randUniform(int l, int u);
 void testPolicy(); 
 void testInfectiousness(); 
 void testSimulation(); 
+void testPerson(); 
 
 // Estimation
 map<enum AtLocation, PopulationSize> population_by_location = {
