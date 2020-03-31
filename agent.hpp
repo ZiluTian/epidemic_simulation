@@ -112,11 +112,16 @@ map<enum AtLocation, AgeInfo> age_by_location = {
 }; 
 
 int randGaussianMixture(vector<pair<double, AgeInfo>> mixture_spec){
+  double guard_check = 0; 
   while (true) {
     for (auto e: mixture_spec){
+      guard_check += e.first; 
       if(prob2Bool(e.first)){
         return randGaussian(e.second.first, e.second.second); 
       }
+    }
+    if (abs(guard_check - 1) > 0.2){
+      throw "Invalid mixed ratio!"; 
     }
     // in the unlikely event that all missed, try again. 
   }
