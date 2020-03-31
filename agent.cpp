@@ -92,6 +92,7 @@ class LocationSummary : public Log{
         {RECOVERED, 0}, 
         {DECEASED, 0}
       };  
+
       daily_history = {
         {SUSCEPTIBLE, vector<PopulationSize>{}}, 
         {EXPOSED, vector<PopulationSize>{}}, 
@@ -111,7 +112,7 @@ class LocationSummary : public Log{
         {RECOVERED, 0}, 
         {DECEASED, 0}
       }; 
-    }; 
+    }
 
     void inc(enum SEIHCRD state){
       daily_summary.find(state)->second += 1; 
@@ -267,6 +268,18 @@ class Person {
       }
     }
 
+    Person(SEIHCRD_Transitions* initial_state, int a){
+      state = initial_state; 
+      age = a;  
+      symptomatic = prob2Bool(PROB_SYMPTOMATIC); 
+      if (symptomatic){
+        latent_period = SYMPTOMATIC_LATENT_PERIOD; 
+        isolate = prob2Bool(INFECTIOUS_SELF_ISOLATE_RATIO); 
+      } else {
+        latent_period = ASYMPTOMATIC_LATENT_PERIOD; 
+      }
+    }
+
     void personalInfo(timestamp ts){
       state->record->printRecord(); 
       cout << "Time " << ts << " Status: " << SEIHCRD[state->health_status] << " Location " << AtLocation[state->location] << " (was) Symptomatic? " << symptomatic << endl; 
@@ -389,6 +402,7 @@ class Location : TransmissionProb {
     PopulationSize initial_susceptible; 
     PopulationSize initial_seed; 
     enum AtLocation location; 
+    MixedAge age_description; 
 
     LocationSummary* summary = new LocationSummary();  
 
@@ -397,21 +411,24 @@ class Location : TransmissionProb {
       initial_seed = seed_by_location.find(loc)->second; 
       total = initial_susceptible + initial_seed; 
       location = loc; 
+      age_description = MixedAge{make_pair(1, age_by_location.find(loc)->second)}; 
     }
 
-    Location(enum AtLocation loc, PopulationSize p, PopulationSize s){
+    Location(enum AtLocation loc, PopulationSize p, PopulationSize s, MixedAge defined_age) {
       initial_susceptible = p; 
       initial_seed = s; 
       total = initial_susceptible + initial_seed; 
       location = loc; 
+      age_description = defined_age; 
     }
 
-    Location(enum AtLocation loc, vector<Person> pop){
+    Location(enum AtLocation loc, vector<Person> pop, MixedAge defined_age){
       initial_susceptible = pop.size(); 
       initial_seed = 0; 
       total = initial_susceptible + initial_seed; 
       location = loc; 
       population = pop; 
+      age_description = defined_age; 
     }
 
     void contact(Person a, Person b, timestamp ts){
@@ -437,7 +454,7 @@ class Location : TransmissionProb {
     void seed(timestamp ts){
       for (int i = 0; i < initial_seed; i++){
         SEIHCRD_Transitions* init_state = new SEIHCRD_Transitions(location, EXPOSED, ts); 
-        Person person(init_state); 
+        Person person(init_state, randGaussianMixture(age_description)); 
         population.push_back(person); 
       }
     }
@@ -447,7 +464,7 @@ class Location : TransmissionProb {
       if (population.size()!=total){
         for (int i = 0; i < initial_susceptible; i++){
           SEIHCRD_Transitions* init_state = new SEIHCRD_Transitions(location, SUSCEPTIBLE, ts); 
-          Person person(init_state); 
+          Person person(init_state, randGaussianMixture(age_description)); 
           population.push_back(person); 
         }
       }
@@ -557,7 +574,7 @@ void testPerson(){
   SEIHCRD_Transitions* state2 = new SEIHCRD_Transitions(HOME, INFECTIOUS, 1); 
   Person person1(state1);
   Person person2(state2); 
-  Location * home = new Location(HOME, vector<Person>{person1, person2}); 
+  Location * home = new Location(HOME, vector<Person>{person1, person2}, MixedAge{make_pair(1, AgeInfo{62, 5})}); 
   
   for (int i = 0; i < 10; ++i){
     home->contact(person1, person2, i); 
@@ -567,14 +584,27 @@ void testPerson(){
 }
 
 void testSimulation(){
-  Simulation sim1(0, 700, 1, 100); 
+  Simulation sim1(0, 700, 1, 50); 
 
-  Location workplace(WORK, 16500, 100); 
-  Location school(SCHOOL, 16500, 100); 
-  Location home(HOME, 16500, 100); 
-  Location nursing_home(RANDOM, 16500, 100); 
+  double rate_under_20 = 0.21; 
+  double rate_under_40 = 0.29; 
+  double rate_under_60 = 0.27; 
+  double rate_above_60 = 0.20;
 
-  sim1.start(vector<Location>{home, workplace, school, nursing_home}); 
+  AgeInfo under_20 = AgeInfo(10, 10);   // .21 
+  AgeInfo under_40 = AgeInfo(30, 10);   // .29
+  AgeInfo under_60 = AgeInfo(50, 10);   // .27 
+  AgeInfo above_60 = AgeInfo(70, 10);   // .20  
+
+  Location overall(RANDOM, 66000, 200, MixedAge{make_pair(rate_under_20, under_20), 
+    make_pair(rate_under_40, under_40), make_pair(rate_under_60, under_60), 
+    make_pair(rate_above_60, above_60)}); 
+  // Location workplace(WORK, 16500, 100, MixedAge{make_pair(1, AgeInfo{30, 10})}); 
+  // Location school(SCHOOL, 16500, 100, MixedAge{make_pair(0.2, AgeInfo{20, 5})}); 
+  // Location home(HOME, 16500, 100, MixedAge{make_pair(1, AgeInfo{40, 10})}); 
+  // Location nursing_home(RANDOM, 16500, 100, MixedAge{make_pair(1, AgeInfo{70, 8})}); 
+
+  sim1.start(vector<Location>{overall}); 
 }
 
 void testInfectiousness(){

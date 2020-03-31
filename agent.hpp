@@ -63,7 +63,7 @@ string AtLocation[] = {
 typedef long long int timestamp; 
 typedef long long int PopulationSize; 
 
-typedef pair<int, int> AgeInfo; // mean, variance 
+typedef pair<double, double> AgeInfo; // mean, variance 
 typedef vector<pair<double, AgeInfo>> MixedAge; // mixed gaussian   
 typedef map<enum SEIHCRD, PopulationSize> Summary; 
 typedef map<enum SEIHCRD, double> PercentileSummary; 
@@ -77,7 +77,8 @@ int getAge(enum AtLocation location);
 int randGaussian(double mean, double var);  
 double randGamma(double a = INFECTIOUS_ALPHA, double b = INFECTIOUS_BETA); 
 int randUniform(int l, int u); 
-int randGaussianMixture(vector<double, pair<double, double>> mixture_spec);  
+int randGaussianMixture(vector<pair<double, pair<double, double>>> mixture_spec);  
+// int randGaussianMixture(vector<pair<double, AgeInfo>> mixture_spec)
 
 void testPolicy(); 
 void testInfectiousness(); 
@@ -111,9 +112,9 @@ map<enum AtLocation, AgeInfo> age_by_location = {
   {RANDOM, make_pair(60, 20)} 
 }; 
 
-int randGaussianMixture(vector<pair<double, AgeInfo>> mixture_spec){
-  double guard_check = 0; 
+int randGaussianMixture(vector<pair<double, pair<double, double>>> mixture_spec){
   while (true) {
+    double guard_check = 0; 
     for (auto e: mixture_spec){
       guard_check += e.first; 
       if(prob2Bool(e.first)){
