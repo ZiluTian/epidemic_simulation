@@ -58,7 +58,7 @@ string AtLocation[] = {
 
 #define SYMPTOMATIC_INFECTIOUSNESS_SCALE 1.5 
 
-#define PER_CAPITA_CONTACTS 10 
+#define PER_CAPITA_CONTACTS 5
 
 typedef long long int timestamp; 
 typedef long long int PopulationSize; 
@@ -97,11 +97,15 @@ map<enum AtLocation, PopulationSize> seed_by_location = {
   {RANDOM, 100000}
 }; 
 
+// 21% aged under 18 
+// 29% 18-39
+// 27% 40-59
+// 20% 60+
 map<enum AtLocation, AgeInfo> age_by_location = {
-  {SCHOOL, make_pair(11, 5)}, 
+  {SCHOOL, make_pair(15, 5)}, 
   {HOME, make_pair(40, 20)}, 
   {WORK, make_pair(45, 8)}, 
-  {RANDOM, make_pair(50, 10)} 
+  {RANDOM, make_pair(60, 20)} 
 }; 
 
 int randGaussian(double mean, double var){
@@ -109,7 +113,9 @@ int randGaussian(double mean, double var){
     normal_distribution<double> normal_dist(u, v); 
     return normal_dist(generator); 
   }; 
-  return ceil(normDist(mean, var)); 
+  int ans = ceil(normDist(mean, var)); 
+  if (ans<0){ return 0; }
+  return ans; 
 }
 
 int getAge(AgeInfo ages){
