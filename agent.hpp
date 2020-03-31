@@ -64,7 +64,7 @@ typedef long long int timestamp;
 typedef long long int PopulationSize; 
 
 typedef pair<int, int> AgeInfo; // mean, variance 
-// typedef vector<pair<double, AgeInfo>>; 
+typedef vector<pair<double, AgeInfo>> MixedAge; // mixed gaussian   
 typedef map<enum SEIHCRD, PopulationSize> Summary; 
 typedef map<enum SEIHCRD, double> PercentileSummary; 
 typedef map<enum SEIHCRD, vector<PopulationSize>> History; 
@@ -77,6 +77,7 @@ int getAge(enum AtLocation location);
 int randGaussian(double mean, double var);  
 double randGamma(double a = INFECTIOUS_ALPHA, double b = INFECTIOUS_BETA); 
 int randUniform(int l, int u); 
+int randGaussianMixture(vector<double, pair<double, double>> mixture_spec);  
 
 void testPolicy(); 
 void testInfectiousness(); 
@@ -109,6 +110,17 @@ map<enum AtLocation, AgeInfo> age_by_location = {
   {WORK, make_pair(45, 8)}, 
   {RANDOM, make_pair(60, 20)} 
 }; 
+
+int randGaussianMixture(vector<pair<double, AgeInfo>> mixture_spec){
+  while (true) {
+    for (auto e: mixture_spec){
+      if(prob2Bool(e.first)){
+        return randGaussian(e.second.first, e.second.second); 
+      }
+    }
+    // in the unlikely event that all missed, try again. 
+  }
+}
 
 int randGaussian(double mean, double var){
   auto normDist = [](double u, double v){
@@ -244,9 +256,11 @@ class NPI {
 
 class TransmissionProb {
   public: 
-    map<enum AtLocation, double> transmission_map = initial_transmission_prob; 
+    map<enum AtLocation, double> transmission_map; 
 
-    TransmissionProb(){}
+    TransmissionProb(){
+      transmission_map = initial_transmission_prob; 
+    }
 
     double getTransProb (enum AtLocation loc) {
       return transmission_map.find(loc) -> second; 
