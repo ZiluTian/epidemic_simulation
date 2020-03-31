@@ -375,6 +375,7 @@ class Location : TransmissionProb {
     PopulationSize initial_susceptible; 
     PopulationSize initial_seed; 
     enum AtLocation location; 
+
     LocationSummary* summary = new LocationSummary();  
 
     Location(enum AtLocation loc){
@@ -454,13 +455,25 @@ class Location : TransmissionProb {
     }
 
     void run(timestamp current_time){
-      int ncontacts = ceil(PER_CAPITA_CONTACTS*total/2); 
+      // int ncontacts = ceil(PER_CAPITA_CONTACTS*total/2); 
+      int ncontacts = PER_CAPITA_CONTACTS; 
+
       if (location == SCHOOL){
         ncontacts *= 2; 
       }
-      for(PopulationSize i = 0; i < ncontacts; ++i){
-        PopulationSize idx1 = randUniform(0, total-1); 
-        PopulationSize idx2 = randUniform(0, total-1); 
+
+      for(PopulationSize i = 0; i < total; ++i){
+        // PopulationSize idx1 = randUniform(0, total-1); 
+        // PopulationSize idx2 = randUniform(0, total-1); 
+        
+        PopulationSize seed1 = randUniform(0, total-1); 
+        PopulationSize idx1 = randGaussian(seed1, ncontacts); 
+        PopulationSize idx2 = randGaussian(seed1, ncontacts); 
+        if (idx1 == idx2) {
+          idx2 += randUniform(0, ncontacts); 
+        }
+        idx1 = min(total-1, idx1); 
+        idx2 = min(total-1, idx2); 
         contact(population[idx1], population[idx2], current_time);
       }
       for (auto &p: population){
@@ -539,7 +552,7 @@ int main(){
 }
 
 void testSimulation(){
-  Simulation sim1(0, 700, 1, 50); 
+  Simulation sim1(0, 700, 1, 100); 
 
   Location workplace(WORK, 16500, 100); 
   Location school(SCHOOL, 16500, 100); 
