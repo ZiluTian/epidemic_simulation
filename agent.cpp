@@ -78,17 +78,21 @@ class LocationSummary : public Log{
     }
 
   public: 
-    Summary daily_summary = {
-      {SUSCEPTIBLE, 0}, 
-      {EXPOSED, 0}, 
-      {INFECTIOUS, 0}, 
-      {HOSPITALIZED, 0}, 
-      {CRITICAL, 0}, 
-      {RECOVERED, 0}, 
-      {DECEASED, 0}
-    }; 
+    Summary daily_summary; 
+    History daily_history; 
+    PercentileSummary percentile_summary; 
 
-    History daily_history = {
+    LocationSummary() {
+      daily_summary = {
+        {SUSCEPTIBLE, 0}, 
+        {EXPOSED, 0}, 
+        {INFECTIOUS, 0}, 
+        {HOSPITALIZED, 0}, 
+        {CRITICAL, 0}, 
+        {RECOVERED, 0}, 
+        {DECEASED, 0}
+      };  
+      daily_history = {
         {SUSCEPTIBLE, vector<PopulationSize>{}}, 
         {EXPOSED, vector<PopulationSize>{}}, 
         {INFECTIOUS, vector<PopulationSize>{}}, 
@@ -96,19 +100,18 @@ class LocationSummary : public Log{
         {CRITICAL, vector<PopulationSize>{}}, 
         {RECOVERED, vector<PopulationSize>{}}, 
         {DECEASED, vector<PopulationSize>{}}
-    }; 
+      }; 
 
-    PercentileSummary percentile_summary = {
-      {SUSCEPTIBLE, 0}, 
-      {EXPOSED, 0}, 
-      {INFECTIOUS, 0}, 
-      {HOSPITALIZED, 0}, 
-      {CRITICAL, 0}, 
-      {RECOVERED, 0}, 
-      {DECEASED, 0}
+      percentile_summary = {
+        {SUSCEPTIBLE, 0}, 
+        {EXPOSED, 0}, 
+        {INFECTIOUS, 0}, 
+        {HOSPITALIZED, 0}, 
+        {CRITICAL, 0}, 
+        {RECOVERED, 0}, 
+        {DECEASED, 0}
+      }; 
     }; 
-
-    LocationSummary(){}; 
 
     void inc(enum SEIHCRD state){
       daily_summary.find(state)->second += 1; 
