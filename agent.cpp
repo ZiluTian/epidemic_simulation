@@ -14,26 +14,14 @@ using namespace std;
 
 class Record : public Log{
   public: 
-    map<enum SEIHCRD, timestamp> record; 
-
-    Record(){
-      record = {
-        {SUSCEPTIBLE, -1}, 
-        {EXPOSED, -1}, 
-        {INFECTIOUS, -1}, 
-        {HOSPITALIZED, -1}, 
-        {CRITICAL, -1}, 
-        {RECOVERED, -1}, 
-        {DECEASED, -1}
-      }; 
-    }
+    Record(){}
 
     timestamp get(enum SEIHCRD state){
-      return record.find(state)->second; 
+      return log.find(state)->second; 
     }
 
     void set(enum SEIHCRD state, timestamp ts){
-      record.find(state)->second = ts; 
+      log.find(state)->second = ts; 
     }
 
     bool timeToTransit(enum SEIHCRD state, timestamp current_time, timestamp duration){
@@ -41,116 +29,46 @@ class Record : public Log{
     }
 
     void printRecord(){
-      printLog(record); 
+      printLog(); 
     }
 }; 
 
 class LocationSummary : public Log{
   private: 
     Summary last_summary;  
-    PopulationSize population = 0; 
-
-    void updateHistory(){
-      for (auto &h: daily_history){
-        h.second.push_back(get(h.first)); 
-      }
-    }
-
-    void updatePercentile(){
-      if (population==0){ 
-        population = accumulate(last_summary.begin(), last_summary.end(), 0, 
-                                [](const PopulationSize prev, const pair<PopulationSize, double>& e) {
-                                  return prev + e.second; 
-                                }); 
-      } 
-      auto it = percentile_summary.begin(); 
-
-      for (auto r: last_summary){
-        it->second = 1.0*(r.second) / population; 
-        ++it; 
-      }
-    }
 
     void reinitialize(){
-      last_summary = daily_summary; 
-      for (auto &s: daily_summary){
+      last_summary = log; 
+      for (auto &s: log){
         s.second = 0; 
       }
     }
 
   public: 
-    Summary daily_summary; 
-    History daily_history; 
-    PercentileSummary percentile_summary; 
-
-    LocationSummary() {
-      daily_summary = {
-        {SUSCEPTIBLE, 0}, 
-        {EXPOSED, 0}, 
-        {INFECTIOUS, 0}, 
-        {HOSPITALIZED, 0}, 
-        {CRITICAL, 0}, 
-        {RECOVERED, 0}, 
-        {DECEASED, 0}
-      };  
-
-      daily_history = {
-        {SUSCEPTIBLE, vector<PopulationSize>{}}, 
-        {EXPOSED, vector<PopulationSize>{}}, 
-        {INFECTIOUS, vector<PopulationSize>{}}, 
-        {HOSPITALIZED, vector<PopulationSize>{}}, 
-        {CRITICAL, vector<PopulationSize>{}}, 
-        {RECOVERED, vector<PopulationSize>{}}, 
-        {DECEASED, vector<PopulationSize>{}}
-      }; 
-
-      percentile_summary = {
-        {SUSCEPTIBLE, 0}, 
-        {EXPOSED, 0}, 
-        {INFECTIOUS, 0}, 
-        {HOSPITALIZED, 0}, 
-        {CRITICAL, 0}, 
-        {RECOVERED, 0}, 
-        {DECEASED, 0}
-      }; 
-    }
+    LocationSummary(){}
 
     void inc(enum SEIHCRD state){
-      daily_summary.find(state)->second += 1; 
+      log.find(state)->second += 1; 
     }
 
     void publish(){
-      // updatePercentile(); 
-      // updateHistory(); 
       reinitialize(); 
     }    
 
     PopulationSize get(enum SEIHCRD state){
-      return daily_summary.find(state)->second; 
+      return log.find(state)->second; 
     }
 
-    Summary getDaily(){
+    Summary getSummary(){
       return last_summary; 
     }
 
-    History getHistory(){
-      return daily_history; 
-    }
-
-    PercentileSummary getPercentile(){
-      return percentile_summary; 
-    }
-
-    void printHistory(){
-      printLog(daily_history); 
-    }
-
     void printSummary(){
-      printLog(last_summary); 
+      printLog(); 
     }
 
     void printPercentile(){
-      printLog(percentile_summary); 
+      printPercent(last_summary); 
     }
 };  
 
@@ -504,16 +422,9 @@ class Location {
     }; 
 
     // assume simulation always starts from 0. 
-    void report(){
+    Summary report(){
       // cout << "Location "<< AtLocation[location] << endl; 
-      summary->printSummary(); 
-      // summary->printPercentile(); 
-    }
-
-    History detailedReport(){
-      cout << "Report summary for Location "<< AtLocation[location] << endl; 
-      // summary->printHistory(); 
-      return summary->getHistory(); 
+      return summary->getSummary(); 
     }
 }; 
 
@@ -525,7 +436,7 @@ class Simulation {
     int report_interval; 
 
     Simulation(){
-      start_time = 0; 
+      start_time = 1; 
       end_time = 100;  
       step_size = 1; 
       report_interval = 10; 
@@ -539,14 +450,14 @@ class Simulation {
     }
 
     void start(vector<Location> locations){
-      auto checkPoint = [locations](long long int ts){
+      Log* simulation_log = new Log(); 
+      auto checkpoint = [locations, simulation_log](long long int ts){
+        vector<Summary> daily_aggregate; 
         for (auto loc: locations){
-          // cout << "Report for time " <<  ts << endl; 
-          cout << ts << " "; 
-          loc.report();
-          // loc.detailedReport();
-          // cout << "\n";
+          cout << ts/DAY << " "; 
+          daily_aggregate.push_back(loc.report());
         }
+        simulation_log->log = simulation_log->aggregateSummary(daily_aggregate); 
       }; 
 
       for (auto &loc: locations){
@@ -558,11 +469,12 @@ class Simulation {
           loc.run(timer);  
         }
         if (timer % report_interval == 0){
-          checkPoint(timer); 
+          checkpoint(timer); 
+          simulation_log->printLog(); 
         }
       }
 
-      checkPoint(end_time); 
+      simulation_log->printPercent(); 
     }
 }; 
 
@@ -603,9 +515,13 @@ void testSimulation(){
   AgeInfo above_60 = AgeInfo(70, 10);    
 
   NPI no_intervention; 
-  Location overall(RANDOM, 66000, 10, MixedAge{make_pair(rate_under_20, under_20), 
-    make_pair(rate_under_40, under_40), make_pair(rate_under_60, under_60), 
-    make_pair(rate_above_60, above_60)}, no_intervention); 
+
+  // Location overall(RANDOM, 664, 10, MixedAge{make_pair(rate_under_20, under_20), 
+  //   make_pair(rate_under_40, under_40), make_pair(rate_under_60, under_60), 
+  //   make_pair(rate_above_60, above_60)}, no_intervention); 
+
+  Location workplace(WORK, 200, 100, MixedAge{make_pair(1, AgeInfo{30, 10})}, no_intervention); 
+  Location school(SCHOOL, 500, 100, MixedAge{make_pair(0.8, AgeInfo{20, 5}), make_pair(0.2, AgeInfo{60, 10})}, no_intervention); 
 
 
   // Location workplace(WORK, 16500, 100, MixedAge{make_pair(1, AgeInfo{30, 10})}); 
@@ -613,7 +529,7 @@ void testSimulation(){
   // Location home(HOME, 16500, 100, MixedAge{make_pair(1, AgeInfo{40, 10})}); 
   // Location nursing_home(RANDOM, 16500, 100, MixedAge{make_pair(1, AgeInfo{70, 8})}); 
 
-  sim1.start(vector<Location>{overall}); 
+  sim1.start(vector<Location>{workplace, school}); 
 }
 
 void testInfectiousness(){

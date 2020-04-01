@@ -67,7 +67,6 @@ typedef pair<double, double> AgeInfo; // mean, variance
 typedef vector<pair<double, AgeInfo>> MixedAge; // mixed gaussian   
 typedef map<enum SEIHCRD, PopulationSize> Summary; 
 typedef map<enum SEIHCRD, double> PercentileSummary; 
-typedef map<enum SEIHCRD, vector<PopulationSize>> History; 
 
 mt19937 generator(random_device{}()); 
 
@@ -319,7 +318,7 @@ class TransmissionProb {
       if (abs(policy.compliance_rate - 1) > 0.01) { return applyCompliance(); }
       return ans;  
     }
-    
+
   public: 
     map<enum AtLocation, double> transmission_map; 
 
@@ -338,28 +337,84 @@ class TransmissionProb {
 
 // TODO: consider using template
 class Log {
-  public:     
-    void printLog(map<enum SEIHCRD, long long int> m){  
-      for (auto e: m){
-        cout << " " << e.second; 
+  private: 
+    map<enum SEIHCRD, long long int> log_template = {
+      {SUSCEPTIBLE, 0}, 
+      {EXPOSED, 0}, 
+      {INFECTIOUS, 0}, 
+      {HOSPITALIZED, 0}, 
+      {CRITICAL, 0}, 
+      {RECOVERED, 0}, 
+      {DECEASED, 0}
+    }; 
+
+    map<enum SEIHCRD, double> percentile_template = {
+      {SUSCEPTIBLE, 0}, 
+      {EXPOSED, 0}, 
+      {INFECTIOUS, 0}, 
+      {HOSPITALIZED, 0}, 
+      {CRITICAL, 0}, 
+      {RECOVERED, 0}, 
+      {DECEASED, 0}
+    }; 
+
+    void viewAsPercentile(Summary summary){
+      map<enum SEIHCRD, double> percentile_summary = percentile_template; 
+      int population = accumulate(summary.begin(), summary.end(), 0, 
+                              [](const PopulationSize prev, const pair<PopulationSize, double>& e) {
+                                return prev + e.second; 
+                              }); 
+      auto it = percentile_summary.begin(); 
+      for (auto r: summary){
+        it->second = 1.0*(r.second) / population; 
+        ++it; 
+      }
+
+      for (auto e: percentile_summary){
+        cout << e.second << " "; 
       }
       cout << endl; 
     }
 
-    void printLog(map<enum SEIHCRD, double> m){  
-      for (auto e: m){
-        cout << SEIHCRD[e.first] << " :  " << e.second; 
-      }
-      cout << endl; 
+  public:  
+
+    map<enum SEIHCRD, long long int> log; 
+
+    Log(){
+      log = log_template; 
     }
 
-    void printLog(map<enum SEIHCRD, vector<long long int>> m){  
-      for (auto h: m){
-        cout << SEIHCRD[h.first] << ":  "; 
-        for (auto j: h.second){
-          cout << j << "  "; 
+    map<enum SEIHCRD, long long int> logTemplate(int init_val){
+      map<enum SEIHCRD, long long int> ans = log_template; 
+      for (auto e: ans){
+        e.second = init_val; 
+      }
+      return ans; 
+    }
+
+    Summary aggregateSummary(vector<Summary> regional_summary){
+      Summary aggregate_summary = log_template; 
+
+      for (auto regional_map: regional_summary){
+        for (auto s: regional_map){
+          aggregate_summary.find(s.first)->second += s.second; 
         }
-        cout << "\n"; 
       }
+      return aggregate_summary;    
+    } 
+
+    void printLog(){  
+      for (auto e: log){
+        cout << e.second << " "; 
+      }
+      cout << endl; 
+    }
+
+    void printPercent(){
+      viewAsPercentile(log); 
+    }
+
+    void printPercent(Summary s){
+      viewAsPercentile(s); 
     }
 }; 
