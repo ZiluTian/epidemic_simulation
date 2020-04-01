@@ -1,6 +1,7 @@
 #include <vector>
 #include <algorithm>
 #include <numeric>
+#include <fstream>
 
 #include "agent.hpp"
 
@@ -393,7 +394,7 @@ class Person {
     }
 }; 
 
-class Location : TransmissionProb {
+class Location {
   private: 
     vector<Person> population; 
     PopulationSize total; 
@@ -403,7 +404,7 @@ class Location : TransmissionProb {
     PopulationSize initial_seed; 
     enum AtLocation location; 
     MixedAge age_description; 
-
+    double transmission_prob; 
     LocationSummary* summary = new LocationSummary();  
 
     Location(enum AtLocation loc){
@@ -412,23 +413,26 @@ class Location : TransmissionProb {
       total = initial_susceptible + initial_seed; 
       location = loc; 
       age_description = MixedAge{make_pair(1, age_by_location.find(loc)->second)}; 
+      transmission_prob = (TransmissionProb()).getTransProb(loc); 
     }
 
-    Location(enum AtLocation loc, PopulationSize p, PopulationSize s, MixedAge defined_age) {
+    Location(enum AtLocation loc, PopulationSize p, PopulationSize s, MixedAge defined_age, NPI policy) {
       initial_susceptible = p; 
       initial_seed = s; 
       total = initial_susceptible + initial_seed; 
       location = loc; 
       age_description = defined_age; 
+      transmission_prob = (TransmissionProb(policy)).getTransProb(loc); 
     }
 
-    Location(enum AtLocation loc, vector<Person> pop, MixedAge defined_age){
+    Location(enum AtLocation loc, vector<Person> pop, MixedAge defined_age, NPI policy){
       initial_susceptible = pop.size(); 
       initial_seed = 0; 
       total = initial_susceptible + initial_seed; 
       location = loc; 
       population = pop; 
       age_description = defined_age; 
+      transmission_prob = (TransmissionProb(policy)).getTransProb(loc); 
     }
 
     void contact(Person a, Person b, timestamp ts){
@@ -442,10 +446,10 @@ class Location : TransmissionProb {
       }
       // asymptomatic case at EXPOSED state is also not infectious
       if (a.state->health_status == SUSCEPTIBLE){
-        a.underExposed(infectious_b, getTransProb(location), ts);
+        a.underExposed(infectious_b, transmission_prob, ts);
       } 
       if (b.state->health_status == SUSCEPTIBLE){
-        b.underExposed(infectious_a, getTransProb(location), ts);
+        b.underExposed(infectious_a, transmission_prob, ts);
       }
       return; 
     } 
@@ -480,15 +484,15 @@ class Location : TransmissionProb {
       }
 
       for(PopulationSize i = 0; i < total; ++i){
-        // PopulationSize idx1 = randUniform(0, total-1); 
-        // PopulationSize idx2 = randUniform(0, total-1); 
+        PopulationSize idx1 = randUniform(0, total-1); 
+        PopulationSize idx2 = randUniform(0, total-1); 
 
-        PopulationSize seed1 = randUniform(0, total-1); 
-        PopulationSize idx1 = randGaussian(seed1, ncontacts); 
-        PopulationSize idx2 = randGaussian(seed1, ncontacts); 
-        if (idx1 == idx2) {
-          idx2 += randUniform(0, ncontacts); 
-        }
+        // PopulationSize seed1 = randUniform(0, total-1); 
+        // PopulationSize idx1 = randGaussian(seed1, ncontacts); 
+        // PopulationSize idx2 = randGaussian(seed1, ncontacts); 
+        // if (idx1 == idx2) {
+        //   idx2 += randUniform(0, ncontacts); 
+        // }
         idx1 = min(total-1, idx1); 
         idx2 = min(total-1, idx2); 
         contact(population[idx1], population[idx2], current_time);
@@ -501,7 +505,7 @@ class Location : TransmissionProb {
 
     // assume simulation always starts from 0. 
     void report(){
-      cout << "Location "<< AtLocation[location] << endl; 
+      // cout << "Location "<< AtLocation[location] << endl; 
       summary->printSummary(); 
       // summary->printPercentile(); 
     }
@@ -537,10 +541,11 @@ class Simulation {
     void start(vector<Location> locations){
       auto checkPoint = [locations](long long int ts){
         for (auto loc: locations){
-          cout << "Report for time " <<  ts << endl; 
-          loc.report(); 
+          // cout << "Report for time " <<  ts << endl; 
+          cout << ts << " "; 
+          loc.report();
           // loc.detailedReport();
-          cout << "\n";  
+          // cout << "\n";
         }
       }; 
 
@@ -574,7 +579,8 @@ void testPerson(){
   SEIHCRD_Transitions* state2 = new SEIHCRD_Transitions(HOME, INFECTIOUS, 1); 
   Person person1(state1);
   Person person2(state2); 
-  Location * home = new Location(HOME, vector<Person>{person1, person2}, MixedAge{make_pair(1, AgeInfo{62, 5})}); 
+  NPI no_intervention; 
+  Location * home = new Location(HOME, vector<Person>{person1, person2}, MixedAge{make_pair(1, AgeInfo{62, 5})}, no_intervention); 
   
   for (int i = 0; i < 10; ++i){
     home->contact(person1, person2, i); 
@@ -584,21 +590,24 @@ void testPerson(){
 }
 
 void testSimulation(){
-  Simulation sim1(0, 700, 1, 50); 
+  Simulation sim1(0, 700, 1, 10); 
 
   double rate_under_20 = 0.21; 
   double rate_under_40 = 0.29; 
   double rate_under_60 = 0.27; 
   double rate_above_60 = 0.20;
 
-  AgeInfo under_20 = AgeInfo(10, 10);   // .21 
-  AgeInfo under_40 = AgeInfo(30, 10);   // .29
-  AgeInfo under_60 = AgeInfo(50, 10);   // .27 
-  AgeInfo above_60 = AgeInfo(70, 10);   // .20  
+  AgeInfo under_20 = AgeInfo(10, 10);    
+  AgeInfo under_40 = AgeInfo(30, 10);    
+  AgeInfo under_60 = AgeInfo(50, 10);    
+  AgeInfo above_60 = AgeInfo(70, 10);    
 
-  Location overall(RANDOM, 66000, 200, MixedAge{make_pair(rate_under_20, under_20), 
+  NPI no_intervention; 
+  Location overall(RANDOM, 66000, 10, MixedAge{make_pair(rate_under_20, under_20), 
     make_pair(rate_under_40, under_40), make_pair(rate_under_60, under_60), 
-    make_pair(rate_above_60, above_60)}); 
+    make_pair(rate_above_60, above_60)}, no_intervention); 
+
+
   // Location workplace(WORK, 16500, 100, MixedAge{make_pair(1, AgeInfo{30, 10})}); 
   // Location school(SCHOOL, 16500, 100, MixedAge{make_pair(0.2, AgeInfo{20, 5})}); 
   // Location home(HOME, 16500, 100, MixedAge{make_pair(1, AgeInfo{40, 10})}); 
@@ -620,14 +629,19 @@ void testInfectiousness(){
 }
 
 void testPolicy(){
-  TransmissionProb initial_config; 
   NPI CI(0, 0.75, 0.75, 0.75, 0.7); 
-  assert(initial_config.transmission_map.find(HOME)->second == 0.33); 
-  assert(initial_config.transmission_map.find(WORK)->second == 0.17); 
-  initial_config.changeTransmissionProb(CI); 
+  NPI no_intervention; 
+
+  TransmissionProb* initial_config = new TransmissionProb(no_intervention); 
+  assert(initial_config->getTransProb(HOME) == 0.33); 
+  assert(initial_config->getTransProb(WORK) == 0.17); 
+  
   // compliance 1: <0.66, 0.08, 0.08, 0.16>  
   // compliance 0.7: <0.56, 0.11, 0.11, 0.21>
-  assert(abs(initial_config.transmission_map.find(HOME)->second - 0.56) < 0.05); 
-  assert(abs(initial_config.transmission_map.find(WORK)->second - 0.11) < 0.05); 
+
+  TransmissionProb case_isolation(CI); 
+  assert(abs(case_isolation.getTransProb(HOME) - 0.56) < 0.05); 
+  assert(abs(case_isolation.getTransProb(WORK) - 0.11) < 0.05); 
+
   cout << "Tests for TransmissionProb passed\n"; 
 }

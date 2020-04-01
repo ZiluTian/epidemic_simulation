@@ -261,19 +261,13 @@ class NPI {
 }; 
 
 class TransmissionProb {
-  public: 
-    map<enum AtLocation, double> transmission_map; 
-
-    TransmissionProb(){
-      transmission_map = initial_transmission_prob; 
-    }
-
-    double getTransProb (enum AtLocation loc) {
-      return transmission_map.find(loc) -> second; 
+  private: 
+    double getInitProb (enum AtLocation loc) {
+      return initial_transmission_prob.find(loc) -> second; 
     } 
 
-    void changeTransmissionProb(NPI policy){
-      vector<double> originals {getTransProb(HOME), getTransProb(SCHOOL), getTransProb(WORK), getTransProb(RANDOM)}; 
+    map<enum AtLocation, double> evaluatePolicy(NPI policy){
+      vector<double> originals {getInitProb(HOME), getInitProb(SCHOOL), getInitProb(WORK), getInitProb(RANDOM)}; 
 
       auto applyReduction = [originals, policy](){
         vector<double> reductions {policy.reduced_home_contact_rate, 
@@ -296,23 +290,50 @@ class TransmissionProb {
         return ans; 
       }; 
 
-      auto applyCompliance = [policy, originals, applyReduction](map<enum AtLocation, double> * transmission_map){
+      auto applyCompliance = [policy, originals, applyReduction](){
         vector<double> apply_reduction = applyReduction(); 
+        
         vector<enum AtLocation> locations {HOME, SCHOOL, WORK, RANDOM}; 
         auto red_it = apply_reduction.begin(); 
         auto orig_it = originals.begin(); 
+        map<enum AtLocation, double> ans{}; 
 
         for (auto loc: locations){
-          (*transmission_map).find(loc) -> second = (
-            (1-policy.compliance_rate) * (*orig_it) + 
-            (policy.compliance_rate * (*red_it))); 
-          red_it++; 
-          orig_it++; 
+          ans.insert(pair<enum AtLocation, double>
+            (loc, ((1-policy.compliance_rate) * (*orig_it) + (policy.compliance_rate * (*red_it))))); 
+          ++red_it;  
+          ++orig_it; 
         }
+        return ans; 
       }; 
 
-      applyCompliance(&transmission_map); 
+      map<enum AtLocation, double> ans{}; 
+      vector<enum AtLocation> locations {HOME, SCHOOL, WORK, RANDOM}; 
+      auto red_it = applyReduction().begin(); 
+
+      for (auto loc: locations){
+        ans.insert(pair<enum AtLocation, double>(loc, *red_it)); 
+        ++red_it; 
+      }
+
+      if (abs(policy.compliance_rate - 1) > 0.01) { return applyCompliance(); }
+      return ans;  
     }
+    
+  public: 
+    map<enum AtLocation, double> transmission_map; 
+
+    TransmissionProb(){
+      transmission_map = initial_transmission_prob; 
+    }
+
+    TransmissionProb(NPI policy){
+      transmission_map = evaluatePolicy(policy); 
+    }
+
+    double getTransProb (enum AtLocation loc) {
+      return transmission_map.find(loc) -> second; 
+    } 
 }; 
 
 // TODO: consider using template
@@ -320,14 +341,16 @@ class Log {
   public:     
     void printLog(map<enum SEIHCRD, long long int> m){  
       for (auto e: m){
-        cout << SEIHCRD[e.first] << ":  " << e.second << endl; 
+        cout << " " << e.second; 
       }
+      cout << endl; 
     }
 
     void printLog(map<enum SEIHCRD, double> m){  
       for (auto e: m){
-        cout << SEIHCRD[e.first] << ":  " << e.second << endl; 
+        cout << SEIHCRD[e.first] << " :  " << e.second; 
       }
+      cout << endl; 
     }
 
     void printLog(map<enum SEIHCRD, vector<long long int>> m){  
