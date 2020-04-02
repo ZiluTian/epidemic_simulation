@@ -390,7 +390,7 @@ class Location {
           population.push_back(person); 
         }
       }
-      cout << "Total population size " << total << "\n"; 
+      // cout << "Total population size " << total << "\n"; 
     }
 
     void run(timestamp current_time){
@@ -401,7 +401,7 @@ class Location {
         ncontacts *= 2; 
       }
 
-      for(PopulationSize i = 0; i < total; ++i){
+      for(PopulationSize i = 0; i < total/ncontacts; ++i){
         PopulationSize idx1 = randUniform(0, total-1); 
         PopulationSize idx2 = randUniform(0, total-1); 
 
@@ -453,8 +453,8 @@ class Simulation {
       Log* simulation_log = new Log(); 
       auto checkpoint = [locations, simulation_log](long long int ts){
         vector<Summary> daily_aggregate; 
+        cout << ts/DAY << " "; 
         for (auto loc: locations){
-          cout << ts/DAY << " "; 
           daily_aggregate.push_back(loc.report());
         }
         simulation_log->log = simulation_log->aggregateSummary(daily_aggregate); 
@@ -474,7 +474,7 @@ class Simulation {
         }
       }
 
-      simulation_log->printPercent(); 
+      // simulation_log->printPercent(); 
     }
 }; 
 
@@ -501,8 +501,9 @@ void testPerson(){
   }
 }
 
+// 0.965367 0.010661 0.0117302 0.000240928 7.52899e-05 0.0118356 9.03478e-05 
 void testSimulation(){
-  Simulation sim1(0, 700, 1, 10); 
+  Simulation sim1(0, 1500, 1, 10); 
 
   double rate_under_20 = 0.21; 
   double rate_under_40 = 0.29; 
@@ -514,22 +515,43 @@ void testSimulation(){
   AgeInfo under_60 = AgeInfo(50, 10);    
   AgeInfo above_60 = AgeInfo(70, 10);    
 
+  double seed_prob = 0.8; 
+
+  int total_compulsory_ed = 50;  // 10M pupils, approx. 
+  int compulsory_ed_size = 2000; // 2000 people per school 
+  int seed_rate = 0.001; 
+
   NPI no_intervention; 
 
-  // Location overall(RANDOM, 664, 10, MixedAge{make_pair(rate_under_20, under_20), 
-  //   make_pair(rate_under_40, under_40), make_pair(rate_under_60, under_60), 
+  vector<Location> all_locs; 
+  
+
+  for (int i = 1; i < total_compulsory_ed; i++){
+    int seed_val = 0; 
+    if (prob2Bool(seed_prob)){
+      seed_val = seed_rate * compulsory_ed_size; 
+    }
+    Location compulsory_ed(SCHOOL, compulsory_ed_size, seed_val, MixedAge{
+      make_pair(0.95, under_20), 
+      make_pair(0.03, under_40), 
+      make_pair(0.02, under_60)
+    }, no_intervention); 
+    all_locs.push_back(compulsory_ed); 
+  }
+
+  // Location
+  // Location overall(RANDOM, 66400, 10, MixedAge{
+  //   make_pair(rate_under_20, under_20), 
+  //   make_pair(rate_under_40, under_40), 
+  //   make_pair(rate_under_60, under_60), 
   //   make_pair(rate_above_60, above_60)}, no_intervention); 
-
-  Location workplace(WORK, 200, 100, MixedAge{make_pair(1, AgeInfo{30, 10})}, no_intervention); 
-  Location school(SCHOOL, 500, 100, MixedAge{make_pair(0.8, AgeInfo{20, 5}), make_pair(0.2, AgeInfo{60, 10})}, no_intervention); 
-
 
   // Location workplace(WORK, 16500, 100, MixedAge{make_pair(1, AgeInfo{30, 10})}); 
   // Location school(SCHOOL, 16500, 100, MixedAge{make_pair(0.2, AgeInfo{20, 5})}); 
   // Location home(HOME, 16500, 100, MixedAge{make_pair(1, AgeInfo{40, 10})}); 
   // Location nursing_home(RANDOM, 16500, 100, MixedAge{make_pair(1, AgeInfo{70, 8})}); 
 
-  sim1.start(vector<Location>{workplace, school}); 
+  sim1.start(all_locs); 
 }
 
 void testInfectiousness(){
