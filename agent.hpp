@@ -53,12 +53,12 @@ string AtLocation[] = {
 #define CRITICAL_DAYS 16*DAY 
 #define DECIDE_CRITICAL 6*DAY  // no greater than HOSPITAL_DAYS. asserted in code.  
 #define ICU_DAYS 10*DAY 
-#define ASYMPTOMATIC_RECOVER 10*DAY
-#define MILD_RECOVER 10*DAY
+#define ASYMPTOMATIC_RECOVER 21*DAY
+#define MILD_RECOVER 14*DAY
 
 #define SYMPTOMATIC_INFECTIOUSNESS_SCALE 1.5 
 
-#define PER_CAPITA_CONTACTS 40
+#define PER_CAPITA_CONTACTS 12
 
 typedef long long int timestamp; 
 typedef long long int PopulationSize; 
@@ -82,7 +82,7 @@ int randGaussianMixture(vector<pair<double, pair<double, double>>> mixture_spec)
 void testPolicy(); 
 void testInfectiousness(); 
 void testSimulation(); 
-void testPerson(); 
+// void testPerson(); 
 
 // Estimation
 map<enum AtLocation, PopulationSize> population_by_location = {

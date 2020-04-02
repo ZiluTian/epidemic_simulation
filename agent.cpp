@@ -79,71 +79,84 @@ class SEIHCRD_Transitions {
     enum AtLocation location; 
     enum SEIHCRD health_status; 
     timestamp init_time; 
+    LocationSummary * medical_center; 
 
-    SEIHCRD_Transitions(enum AtLocation loc, enum SEIHCRD health, timestamp ts){
+    SEIHCRD_Transitions(enum AtLocation loc, enum SEIHCRD health, timestamp ts, LocationSummary * mc){
       record = new Record(); 
       location = loc; 
       health_status = health; 
       init_time = ts; 
       record->set(health_status, ts); 
+      medical_center = mc; 
+      medical_center->inc(health_status); 
     }
 
     void S2E(timestamp ts){
       health_status = EXPOSED; 
       record -> set(health_status, ts); 
+      medical_center->inc(health_status); 
     }
 
     void E2I(timestamp ts){
       health_status = INFECTIOUS;
       record -> set(health_status, ts); 
+      medical_center->inc(health_status); 
     }
 
     void I2R(timestamp ts){
       health_status = RECOVERED;
       location = HOME; 
       record -> set(health_status, ts); 
+      medical_center->inc(health_status); 
     } 
 
     void I2H(timestamp ts){
       health_status = HOSPITALIZED;
       location = HOSPITAL; 
       record -> set(health_status, ts); 
+      medical_center->inc(health_status); 
     }
 
     void I2D(timestamp ts){
       health_status = DECEASED;
       location = CEMENTRY; 
       record -> set(health_status, ts); 
+      medical_center->inc(health_status); 
     }
 
     void H2C(timestamp ts){
       health_status = CRITICAL;
       location = HOSPITAL; 
       record -> set(health_status, ts); 
+      medical_center->inc(health_status); 
     }
 
     void H2R(timestamp ts){
       health_status = RECOVERED;
       location = HOME; 
       record -> set(health_status, ts); 
+      medical_center->inc(health_status); 
     }
 
     void H2D(timestamp ts){
       health_status = DECEASED;
       location = CEMENTRY; 
       record -> set(health_status, ts); 
+      medical_center->inc(health_status); 
     }
 
     void C2D(timestamp ts){
       health_status = DECEASED;
       location = CEMENTRY; 
       record -> set(health_status, ts); 
+      medical_center->inc(health_status); 
     }
 
     void C2R(timestamp ts){
       health_status = RECOVERED;
       location = HOME; 
       record -> set(health_status, ts); 
+      medical_center->inc(health_status); 
     }
 }; 
 
@@ -250,9 +263,11 @@ class Person {
     }
     
     // handle the state transition 
-    enum SEIHCRD statusUpdate(timestamp ts){
+    void statusUpdate(timestamp ts){
       // personalInfo(ts); 
       switch (state->health_status) {
+        case SUSCEPTIBLE: 
+          break; 
         case EXPOSED:  
           if (symptomatic && state->record->timeToTransit(state->health_status, ts, INCUBATION_PERIOD)){
             state->E2I(ts); 
@@ -303,12 +318,12 @@ class Person {
             }
           }
           break; 
-        case SUSCEPTIBLE: 
         case RECOVERED:
         case DECEASED: 
           break;   
       }
-      return state->health_status; 
+      return; 
+      // return state->health_status; 
     }
 }; 
 
@@ -323,7 +338,7 @@ class Location {
     enum AtLocation location; 
     MixedAge age_description; 
     double transmission_prob; 
-    LocationSummary* summary = new LocationSummary();  
+    LocationSummary* summary;  
 
     Location(enum AtLocation loc){
       initial_susceptible = population_by_location.find(loc)->second;  
@@ -332,6 +347,7 @@ class Location {
       location = loc; 
       age_description = MixedAge{make_pair(1, age_by_location.find(loc)->second)}; 
       transmission_prob = (TransmissionProb()).getTransProb(loc); 
+      summary = new LocationSummary(); 
     }
 
     Location(enum AtLocation loc, PopulationSize p, PopulationSize s, MixedAge defined_age, NPI policy) {
@@ -341,6 +357,7 @@ class Location {
       location = loc; 
       age_description = defined_age; 
       transmission_prob = (TransmissionProb(policy)).getTransProb(loc); 
+      summary = new LocationSummary(); 
     }
 
     Location(enum AtLocation loc, vector<Person> pop, MixedAge defined_age, NPI policy){
@@ -351,6 +368,7 @@ class Location {
       population = pop; 
       age_description = defined_age; 
       transmission_prob = (TransmissionProb(policy)).getTransProb(loc); 
+      summary = new LocationSummary(); 
     }
 
     void contact(Person a, Person b, timestamp ts){
@@ -375,7 +393,7 @@ class Location {
     // generate the population 
     void seed(timestamp ts){
       for (int i = 0; i < initial_seed; i++){
-        SEIHCRD_Transitions* init_state = new SEIHCRD_Transitions(location, EXPOSED, ts); 
+        SEIHCRD_Transitions* init_state = new SEIHCRD_Transitions(location, EXPOSED, ts, summary); 
         Person person(init_state, randGaussianMixture(age_description)); 
         population.push_back(person); 
       }
@@ -385,12 +403,12 @@ class Location {
       seed(ts); 
       if (population.size()!=total){
         for (int i = 0; i < initial_susceptible; i++){
-          SEIHCRD_Transitions* init_state = new SEIHCRD_Transitions(location, SUSCEPTIBLE, ts); 
+          SEIHCRD_Transitions* init_state = new SEIHCRD_Transitions(location, SUSCEPTIBLE, ts, summary); 
           Person person(init_state, randGaussianMixture(age_description)); 
           population.push_back(person); 
         }
       }
-      cout << "Total population size " << total << "\n"; 
+      // cout << "Total population size " << total << "\n"; 
     }
 
     void run(timestamp current_time){
@@ -416,7 +434,7 @@ class Location {
         contact(population[idx1], population[idx2], current_time);
       }
       for (auto &p: population){
-        summary->inc(p.statusUpdate(current_time)); 
+        p.statusUpdate(current_time); 
       }
       summary->publish(); 
     }; 
@@ -453,8 +471,8 @@ class Simulation {
       Log* simulation_log = new Log(); 
       auto checkpoint = [locations, simulation_log](long long int ts){
         vector<Summary> daily_aggregate; 
+        cout << ts/DAY << " "; 
         for (auto loc: locations){
-          cout << ts/DAY << " "; 
           daily_aggregate.push_back(loc.report());
         }
         simulation_log->log = simulation_log->aggregateSummary(daily_aggregate); 
@@ -474,7 +492,7 @@ class Simulation {
         }
       }
 
-      simulation_log->printPercent(); 
+      // simulation_log->printPercent(); 
     }
 }; 
 
@@ -486,50 +504,43 @@ int main(){
   return 0; 
 }
 
-void testPerson(){
-  SEIHCRD_Transitions* state1 = new SEIHCRD_Transitions(HOME, SUSCEPTIBLE, 1); 
-  SEIHCRD_Transitions* state2 = new SEIHCRD_Transitions(HOME, INFECTIOUS, 1); 
-  Person person1(state1);
-  Person person2(state2); 
-  NPI no_intervention; 
-  Location * home = new Location(HOME, vector<Person>{person1, person2}, MixedAge{make_pair(1, AgeInfo{62, 5})}, no_intervention); 
+// void testPerson(){
+//   SEIHCRD_Transitions* state1 = new SEIHCRD_Transitions(HOME, SUSCEPTIBLE, 1); 
+//   SEIHCRD_Transitions* state2 = new SEIHCRD_Transitions(HOME, INFECTIOUS, 1); 
+//   Person person1(state1);
+//   Person person2(state2); 
+//   NPI no_intervention; 
+//   Location * home = new Location(HOME, vector<Person>{person1, person2}, MixedAge{make_pair(1, AgeInfo{62, 5})}, no_intervention); 
   
-  for (int i = 0; i < 10; ++i){
-    home->contact(person1, person2, i); 
-    person1.personalInfo(i); 
-    person2.personalInfo(i); 
-  }
-}
+//   for (int i = 0; i < 10; ++i){
+//     home->contact(person1, person2, i); 
+//     person1.personalInfo(i); 
+//     person2.personalInfo(i); 
+//   }
+// }
 
 void testSimulation(){
-  Simulation sim1(0, 700, 1, 10); 
+  Simulation sim1(0, 1500, 1, 10); 
 
   double rate_under_20 = 0.21; 
   double rate_under_40 = 0.29; 
   double rate_under_60 = 0.27; 
   double rate_above_60 = 0.20;
 
-  AgeInfo under_20 = AgeInfo(10, 10);    
-  AgeInfo under_40 = AgeInfo(30, 10);    
-  AgeInfo under_60 = AgeInfo(50, 10);    
-  AgeInfo above_60 = AgeInfo(70, 10);    
+  AgeInfo under_20 = AgeInfo(10, 10);    // 0.18: school, 0.02: home, 0.01: random
+  AgeInfo under_40 = AgeInfo(30, 10);    // 0.002: faculty, 0.01: students, 0.2 work, 
+  AgeInfo under_60 = AgeInfo(50, 10);    // 0.005: faculty 
+  AgeInfo above_60 = AgeInfo(70, 10);    // 0.005: faculty 
 
   NPI no_intervention; 
 
-  // Location overall(RANDOM, 664, 10, MixedAge{make_pair(rate_under_20, under_20), 
-  //   make_pair(rate_under_40, under_40), make_pair(rate_under_60, under_60), 
-  //   make_pair(rate_above_60, above_60)}, no_intervention); 
+  vector<Location> locs = vector<Location>{}; 
 
-  Location workplace(WORK, 200, 100, MixedAge{make_pair(1, AgeInfo{30, 10})}, no_intervention); 
-  Location school(SCHOOL, 500, 100, MixedAge{make_pair(0.8, AgeInfo{20, 5}), make_pair(0.2, AgeInfo{60, 10})}, no_intervention); 
+  Location city_1(RANDOM, 6640000, 10, MixedAge{make_pair(rate_under_20, under_20), 
+    make_pair(rate_under_40, under_40), make_pair(rate_under_60, under_60), 
+    make_pair(rate_above_60, above_60)}, no_intervention); 
 
-
-  // Location workplace(WORK, 16500, 100, MixedAge{make_pair(1, AgeInfo{30, 10})}); 
-  // Location school(SCHOOL, 16500, 100, MixedAge{make_pair(0.2, AgeInfo{20, 5})}); 
-  // Location home(HOME, 16500, 100, MixedAge{make_pair(1, AgeInfo{40, 10})}); 
-  // Location nursing_home(RANDOM, 16500, 100, MixedAge{make_pair(1, AgeInfo{70, 8})}); 
-
-  sim1.start(vector<Location>{workplace, school}); 
+  sim1.start(vector<Location>{city_1}); 
 }
 
 void testInfectiousness(){
