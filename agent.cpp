@@ -253,6 +253,8 @@ class Person {
     enum SEIHCRD statusUpdate(timestamp ts){
       // personalInfo(ts); 
       switch (state->health_status) {
+        case SUSCEPTIBLE: 
+          break; 
         case EXPOSED:  
           if (symptomatic && state->record->timeToTransit(state->health_status, ts, INCUBATION_PERIOD)){
             state->E2I(ts); 
@@ -303,7 +305,6 @@ class Person {
             }
           }
           break; 
-        case SUSCEPTIBLE: 
         case RECOVERED:
         case DECEASED: 
           break;   
@@ -515,41 +516,54 @@ void testSimulation(){
   AgeInfo under_60 = AgeInfo(50, 10);    
   AgeInfo above_60 = AgeInfo(70, 10);    
 
-  double seed_prob = 0.8; 
-
-  int total_compulsory_ed = 50;  // 10M pupils, approx. 
-  int compulsory_ed_size = 2000; // 2000 people per school 
-  int seed_rate = 0.001; 
+  double seed_prob = 0.9; 
+  double seed_rate = 0.001; 
 
   NPI no_intervention; 
 
   vector<Location> all_locs; 
   
-
-  for (int i = 1; i < total_compulsory_ed; i++){
+  for (int i = 0; i < 100; i++){
+    int rand_size = randGaussian(7000, 1000); 
     int seed_val = 0; 
     if (prob2Bool(seed_prob)){
-      seed_val = seed_rate * compulsory_ed_size; 
+      seed_val = seed_rate * rand_size; 
     }
-    Location compulsory_ed(SCHOOL, compulsory_ed_size, seed_val, MixedAge{
-      make_pair(0.95, under_20), 
-      make_pair(0.03, under_40), 
-      make_pair(0.02, under_60)
+
+    Location rand(RANDOM, rand_size, seed_val, MixedAge{
+      make_pair(rate_under_20, under_20), 
+      make_pair(rate_under_40, under_40), 
+      make_pair(rate_under_60, under_60), 
+      make_pair(rate_above_60, above_60), 
     }, no_intervention); 
-    all_locs.push_back(compulsory_ed); 
+    all_locs.push_back(rand); 
+
+    // Location rand_loc(RANDOM, 0.3*rand_size, 0.3*seed_val, MixedAge{
+    //   make_pair(0.4, under_40), 
+    //   make_pair(0.4, under_60), 
+    //   make_pair(0.2, above_60)}, no_intervention); 
+    // all_locs.push_back(rand_loc); 
+
+    // Location school(SCHOOL, rand_size, seed_val, MixedAge{
+    //   make_pair(0.95, under_20), 
+    //   make_pair(0.02, under_40), 
+    //   make_pair(0.02, under_60), 
+    //   make_pair(0.01, above_60)}, no_intervention); 
+    // all_locs.push_back(school); 
+
+    // Location work(WORK, 1.5*rand_size, seed_val, MixedAge{
+    //   make_pair(0.01, under_20), 
+    //   make_pair(0.7, under_40), 
+    //   make_pair(0.2, under_60), 
+    //   make_pair(0.09, above_60)}, no_intervention);  
+    // all_locs.push_back(work); 
+
+    // Location home(HOME, 0.8*rand_size, 0.8*seed_val, MixedAge{
+    //   make_pair(0.1, under_40), 
+    //   make_pair(0.1, under_60), 
+    //   make_pair(0.8, above_60)}, no_intervention);  
+    // all_locs.push_back(home); 
   }
-
-  // Location
-  // Location overall(RANDOM, 66400, 10, MixedAge{
-  //   make_pair(rate_under_20, under_20), 
-  //   make_pair(rate_under_40, under_40), 
-  //   make_pair(rate_under_60, under_60), 
-  //   make_pair(rate_above_60, above_60)}, no_intervention); 
-
-  // Location workplace(WORK, 16500, 100, MixedAge{make_pair(1, AgeInfo{30, 10})}); 
-  // Location school(SCHOOL, 16500, 100, MixedAge{make_pair(0.2, AgeInfo{20, 5})}); 
-  // Location home(HOME, 16500, 100, MixedAge{make_pair(1, AgeInfo{40, 10})}); 
-  // Location nursing_home(RANDOM, 16500, 100, MixedAge{make_pair(1, AgeInfo{70, 8})}); 
 
   sim1.start(all_locs); 
 }

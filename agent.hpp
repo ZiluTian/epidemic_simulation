@@ -54,11 +54,11 @@ string AtLocation[] = {
 #define DECIDE_CRITICAL 6*DAY  // no greater than HOSPITAL_DAYS. asserted in code.  
 #define ICU_DAYS 10*DAY 
 #define ASYMPTOMATIC_RECOVER 21*DAY
-#define MILD_RECOVER 10*DAY
+#define MILD_RECOVER 14*DAY
 
 #define SYMPTOMATIC_INFECTIOUSNESS_SCALE 1.5 
 
-#define PER_CAPITA_CONTACTS 12
+#define PER_CAPITA_CONTACTS 24
 
 typedef long long int timestamp; 
 typedef long long int PopulationSize; 
